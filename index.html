@@ -449,16 +449,10 @@ function setStatus(state, msg){
 }
 
 // ── FETCH live data ────────────────────────────────────────────────────
-// ── Fetch with timeout + proxy fallback ───────────────────────────────
-var PROXIES=[
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?url=',
-  'https://api.codetabs.com/v1/proxy?quest='
-];
-
+// ── Fetch via Netlify serverless proxy ────────────────────────────────
 async function fetchWithTimeout(url, ms){
   var ctrl=new AbortController();
-  var timer=setTimeout(function(){ctrl.abort();},ms||8000);
+  var timer=setTimeout(function(){ctrl.abort();},ms||12000);
   try{
     var r=await fetch(url,{signal:ctrl.signal});
     return r;
@@ -466,17 +460,20 @@ async function fetchWithTimeout(url, ms){
 }
 
 async function fetchViaProxy(rawUrl){
-  var last;
-  for(var i=0;i<PROXIES.length;i++){
-    try{
-      var r=await fetchWithTimeout(PROXIES[i]+encodeURIComponent(rawUrl),9000);
-      if(r.ok)return r;
-      last='HTTP '+r.status+' (proxy '+(i+1)+')';
-    }catch(e){
-      last=e.name==='AbortError'?'Timeout on proxy '+(i+1):e.message;
-    }
+  // Route Yahoo Finance calls through our Netlify function
+  var optMatch=rawUrl.match(/\/options\/([^/?]+)(?:\?date=(\d+))?/);
+  var chartMatch=rawUrl.match(/\/chart\/%5EVIX/);
+  var funcUrl;
+  if(optMatch){
+    funcUrl='/.netlify/functions/quote?symbol='+optMatch[1]+(optMatch[2]?'&date='+optMatch[2]:'');
+  } else if(chartMatch){
+    funcUrl='/.netlify/functions/quote?symbol=%5EVIX&type=chart';
+  } else {
+    throw new Error('Unknown URL pattern');
   }
-  throw new Error('All proxies failed — last: '+last);
+  var r=await fetchWithTimeout(funcUrl,12000);
+  if(!r.ok)throw new Error('Proxy function HTTP '+r.status);
+  return r;
 }
 
 async function fetchData(){
