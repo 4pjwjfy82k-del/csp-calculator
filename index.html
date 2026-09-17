@@ -480,7 +480,7 @@ async function fetchData(){
   var sym=el('SYM').value.trim().toUpperCase();
   if(!sym){setStatus('err','Enter a symbol');return;}
   var dte=Math.max(1,val('DTE'));
-  var otmTarget=val('OTM_T')/100;
+  var otm=val('OTM_T');
 
   var btn=el('fetch-btn');
   btn.disabled=true;
@@ -490,61 +490,32 @@ async function fetchData(){
   el('prem-box').classList.remove('fetched');
 
   try{
-    // ── Step 1: price + expirations ──
-    setStatus('loading','Getting '+sym+' price…');
-    var r1=await fetchViaProxy('https://query1.finance.yahoo.com/v7/finance/options/'+sym);
-    var d1=await r1.json();
-    var res=d1.optionChain&&d1.optionChain.result&&d1.optionChain.result[0];
-    if(!res)throw new Error('No data for '+sym+' — check symbol');
+    var r=await fetchWithTimeout(
+      '/.netlify/functions/quote?symbol='+encodeURIComponent(sym)+'&dte='+dte+'&otm='+otm,
+      20000
+    );
+    if(!r.ok)throw new Error('Server error '+r.status);
+    var d=await r.json();
+    if(d.error)throw new Error(d.error);
 
-    var price=res.quote.regularMarketPrice;
-    var exps=res.expirationDates;
-    if(!exps||!exps.length)throw new Error('No expirations found for '+sym);
+    // Populate fields
+    el('U').value=d.price.toFixed(2);
+    el('K').value=d.strike.toFixed(2);
+    el('P').value=(d.mid||d.bid||0).toFixed(2);
+    el('DTE').value=d.actualDTE;
+    if(d.vix)el('VIX').value=d.vix.toFixed(2);
 
-    // ── Step 2: nearest expiration to DTE ──
-    var now=Date.now()/1000;
-    var target=now+dte*86400;
-    var bestExp=exps.reduce(function(a,b){return Math.abs(b-target)<Math.abs(a-target)?b:a;});
-    var actualDTE=Math.max(1,Math.round((bestExp-now)/86400));
-    var expDate=new Date(bestExp*1000).toLocaleDateString('en-US',{month:'short',day:'numeric'});
-
-    // ── Step 3: puts chain for that expiration ──
-    setStatus('loading','Getting puts for '+expDate+'…');
-    var r2=await fetchViaProxy('https://query1.finance.yahoo.com/v7/finance/options/'+sym+'?date='+bestExp);
-    var d2=await r2.json();
-    var opts=d2.optionChain&&d2.optionChain.result&&d2.optionChain.result[0]&&d2.optionChain.result[0].options&&d2.optionChain.result[0].options[0];
-    var puts=opts&&opts.puts;
-    if(!puts||!puts.length)throw new Error('No puts found for '+expDate);
-
-    // ── Step 4: strike nearest to OTM target ──
-    var targetStrike=price*(1-otmTarget);
-    var bestPut=puts.reduce(function(a,b){return Math.abs(b.strike-targetStrike)<Math.abs(a.strike-targetStrike)?b:a;});
-    var mid=((bestPut.bid||0)+(bestPut.ask||0))/2;
-    if(mid<=0)mid=bestPut.lastPrice||0;
-
-    // ── Step 5: VIX (optional) ──
-    try{
-      var rv=await fetchWithTimeout(PROXIES[0]+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=1d'),6000);
-      var dv=await rv.json();
-      var vixPrice=dv.chart.result[0].meta.regularMarketPrice;
-      el('VIX').value=vixPrice.toFixed(2);
-    }catch(ve){/* VIX optional */}
-
-    // ── Step 6: populate ──
-    el('U').value=price.toFixed(2);
-    el('K').value=bestPut.strike.toFixed(2);
-    el('P').value=mid.toFixed(2);
-    el('DTE').value=actualDTE;
     ['U','K'].forEach(function(id){el(id).classList.add('fetched');});
     el('prem-box').classList.add('fetched');
 
-    LAST_EXPIRY=expDate+' · '+actualDTE+'d';
+    var expDate=new Date(d.expDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    LAST_EXPIRY=expDate+' · '+d.actualDTE+'d';
     var badge=el('expiry-badge');
     badge.textContent=sym+' '+expDate;
     badge.classList.add('show');
 
     var ts=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
-    setStatus('ok',sym+' · '+expDate+' · '+actualDTE+' DTE · '+ts+' · 15-min delay');
+    setStatus('ok',sym+' · '+expDate+' · '+d.actualDTE+' DTE · '+ts+' · 15-min delay');
     saveInputs();
     calc();
 
