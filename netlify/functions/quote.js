@@ -1,5 +1,4 @@
 const https = require('https');
-
 const BASE = 'api.polygon.io';
 
 function get(path) {
@@ -12,7 +11,7 @@ function get(path) {
       res.on('data', d => body += d);
       res.on('end', () => {
         try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
-        catch(e) { reject(new Error('Parse error: ' + body.slice(0,100))); }
+        catch(e) { reject(new Error('Parse: ' + body.slice(0,200))); }
       });
     }).on('error', reject);
   });
@@ -25,18 +24,17 @@ exports.handler = async event => {
   if (!sym) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'symbol required' }) };
 
   try {
-    // ── 1. Stock price ──────────────────────────────────────────────
-    const pr = await get(`/v2/snapshot/locale/us/markets/stocks/tickers/${sym}`);
-    const tk = pr.data.ticker;
-    if (!tk) throw new Error(`No data for ${sym} — check symbol`);
-    const price = (tk.lastTrade && tk.lastTrade.p) || (tk.day && tk.day.c) || (tk.prevDay && tk.prevDay.c);
-    if (!price) throw new Error(`Could not get price for ${sym}`);
+    // ── 1. Stock price via prev close (reliable on free tier) ───────
+    const pr = await get(`/v2/aggs/ticker/${sym}/prev`);
+    if (pr.data.resultsCount === 0 || !pr.data.results || !pr.data.results.length)
+      throw new Error(`No price data for ${sym} — is the market open? status: ${pr.data.status}`);
+    const price = pr.data.results[0].c; // previous close
 
     // ── 2. Options expirations ──────────────────────────────────────
     const refr = await get(`/v3/reference/options/contracts?underlying_ticker=${sym}&contract_type=put&order=asc&limit=250&sort=expiration_date`);
-    const contracts = (refr.data.results || []);
+    const contracts = refr.data.results || [];
+    if (!contracts.length) throw new Error(`No options contracts found for ${sym}. status: ${refr.data.status}`);
     const expirations = [...new Set(contracts.map(c => c.expiration_date))].sort();
-    if (!expirations.length) throw new Error(`No options found for ${sym}`);
 
     // ── 3. Find expiration nearest to DTE ──────────────────────────
     const dte = Math.max(1, parseInt(q.dte) || 7);
@@ -49,8 +47,8 @@ exports.handler = async event => {
 
     // ── 4. Puts chain for that expiration ──────────────────────────
     const chain = await get(`/v3/snapshot/options/${sym}?expiration_date=${bestExp}&contract_type=put&limit=250&order=asc`);
-    const puts = (chain.data.results || []);
-    if (!puts.length) throw new Error(`No puts found for ${bestExp}`);
+    const puts = chain.data.results || [];
+    if (!puts.length) throw new Error(`No puts snapshot for ${bestExp}. May require paid tier. status: ${chain.data.status}`);
 
     // ── 5. Find strike nearest to OTM target ───────────────────────
     const otm = parseFloat(q.otm) || 2.5;
@@ -58,18 +56,16 @@ exports.handler = async event => {
     const best = puts.reduce((a, b) =>
       Math.abs(b.details.strike_price - targetStrike) < Math.abs(a.details.strike_price - targetStrike) ? b : a
     );
+    const bid = (best.last_quote && best.last_quote.bid) || (best.day && best.day.close) || 0;
+    const ask = (best.last_quote && best.last_quote.ask) || bid;
+    const mid = (best.last_quote && best.last_quote.midpoint) || (bid + ask) / 2;
 
-    const bid = best.last_quote ? best.last_quote.bid : (best.day ? best.day.close : 0);
-    const ask = best.last_quote ? best.last_quote.ask : bid;
-    const mid = best.last_quote && best.last_quote.midpoint ? best.last_quote.midpoint : (bid + ask) / 2;
-
-    // ── 6. VIX ──────────────────────────────────────────────────────
+    // ── 6. VIX ─────────────────────────────────────────────────────
     let vix = null;
     try {
-      const vr = await get('/v2/snapshot/locale/us/markets/indices/tickers/I:VIX');
-      const vt = vr.data.ticker;
-      vix = (vt && vt.day && vt.day.c) || null;
-    } catch(ve) { /* VIX optional */ }
+      const vr = await get('/v2/aggs/ticker/I:VIX/prev');
+      vix = vr.data.results && vr.data.results[0] && vr.data.results[0].c;
+    } catch(ve) { /* optional */ }
 
     return {
       statusCode: 200,
