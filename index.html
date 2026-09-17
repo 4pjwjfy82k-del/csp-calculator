@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>CSP Calc V2</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --black:#000;--white:#fff;--bg:#f2f2ee;--panel:#fff;
+  --bdr:#d8d8d4;--rule:#eeeeea;
+  --ora:#FFA028;--ora2:#c87800;
+  --grn:#007a50;--red:#c8301c;--blu:#1050a0;
+  --mid:#555;--light:#999;
+  --mono:"IBM Plex Mono",monospace;
+  --sans:"IBM Plex Sans",sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--black);min-height:100vh;-webkit-text-size-adjust:100%}
+
+/* TOPBAR */
+.topbar{background:var(--black);border-bottom:3px solid var(--ora);padding:0 16px;height:48px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
+.tb-brand{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ora);letter-spacing:3px;white-space:nowrap}
+.tb-v2{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ora2);background:#1a0e00;border:1px solid var(--ora2);padding:2px 6px;border-radius:2px;letter-spacing:1px}
+.tb-time{margin-left:auto;font-family:var(--mono);font-size:11px;color:#555}
+
+/* FETCH BAR */
+.fetch-bar{background:#0a0a08;border-bottom:2px solid #222;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fb-group{display:flex;align-items:center;gap:6px}
+.fb-label{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;color:#666;text-transform:uppercase;white-space:nowrap}
+.fb-input{font-family:var(--mono);font-size:15px;font-weight:700;color:#fff;background:#1a1a16;border:1px solid #333;border-radius:3px;padding:7px 10px;width:80px;-webkit-appearance:none}
+.fb-input.sym{width:90px;text-transform:uppercase;letter-spacing:2px;font-size:16px}
+.fb-input.otm{width:70px}
+.fb-input:focus{outline:none;border-color:var(--ora)}
+.fb-btn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;background:var(--ora);color:#000;border:none;border-radius:3px;padding:9px 16px;cursor:pointer;white-space:nowrap}
+.fb-btn:active{opacity:.8}
+.fb-btn:disabled{opacity:.4;cursor:default}
+.fb-status{display:flex;align-items:center;gap:7px;margin-left:4px}
+.fb-dot{width:7px;height:7px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s}
+.fb-dot.ok{background:#00b464}
+.fb-dot.err{background:#c8301c}
+.fb-dot.loading{background:var(--ora);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.fb-msg{font-family:var(--mono);font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.fb-msg.ok{color:#00b464}
+.fb-msg.err{color:#c8301c}
+
+/* INPUTS PANEL */
+.inputs-panel{background:var(--panel);border-bottom:2px solid var(--black);padding:14px 16px 16px}
+.sec-title{font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--ora2);margin-bottom:12px}
+.inp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:600px){.inp-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:380px){.inp-grid{grid-template-columns:repeat(2,1fr)}}
+.inp-cell{}
+.inp-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mid);margin-bottom:5px;display:block}
+.inp{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--black);background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:10px;width:100%;min-height:50px;-webkit-appearance:none}
+.inp:focus{outline:none;border-color:var(--ora);background:#fff}
+.inp.fetched{border-color:#aaddcc;background:#f2faf6}
+.inp-unit{font-family:var(--mono);font-size:10px;color:var(--light);margin-top:3px}
+
+/* Premium box */
+.prem-box{background:#f0faf4;border:2px solid var(--grn);border-radius:4px;padding:12px 14px;margin-top:12px}
+.prem-box.fetched{border-color:#00a050}
+.prem-label{font-size:11px;font-weight:700;color:var(--grn);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}
+.prem-row{display:flex;align-items:center;gap:6px}
+.prem-sym{font-family:var(--mono);font-size:26px;color:var(--grn)}
+.prem-in{font-family:var(--mono);font-size:44px;font-weight:700;color:var(--grn);background:transparent;border:none;width:100%;min-width:0;min-height:58px;-webkit-appearance:none}
+.prem-in:focus{outline:none}
+.prem-hint{font-family:var(--mono);font-size:11px;color:var(--grn);opacity:.75;margin-top:5px}
+
+/* OTM banner */
+.otm-banner{margin-top:12px;background:var(--black);border-radius:4px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.otm-main{display:flex;align-items:baseline;gap:8px}
+.otm-num{font-family:var(--mono);font-size:52px;font-weight:700;color:var(--ora);line-height:1;letter-spacing:-2px}
+.otm-lbl{font-family:var(--mono);font-size:14px;color:#888;font-weight:600}
+.otm-stats{display:flex;gap:20px;flex-wrap:wrap}
+.otm-stat-lbl{font-family:var(--mono);font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.otm-stat-val{font-family:var(--mono);font-size:17px;font-weight:700;color:#fff}
+.expiry-badge{font-family:var(--mono);font-size:11px;color:#888;background:#111;border:1px solid #333;border-radius:2px;padding:3px 8px;display:none;white-space:nowrap}
+.expiry-badge.show{display:inline-block}
+
+/* RETURN BAR */
+.ret-bar{background:var(--black);border-bottom:3px solid var(--ora);display:grid;grid-template-columns:1fr 1fr 1fr}
+.rb-cell{padding:14px 16px;border-right:1px solid #222}
+.rb-cell:last-child{border-right:none}
+.rb-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:5px}
+.rb-value{font-family:var(--mono);font-size:26px;font-weight:700;color:#fff;line-height:1;letter-spacing:-1px}
+.rb-sub{font-family:var(--mono);font-size:10px;color:#555;margin-top:3px}
+
+/* CONTENT */
+.content{padding:12px;display:flex;flex-direction:column;gap:12px}
+
+/* Collateral */
+.col-strip{background:#eef4fc;border:2px solid var(--blu);border-radius:4px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:380px){.col-strip{grid-template-columns:1fr 1fr}}
+.cs-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blu);margin-bottom:4px}
+.cs-value{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--black)}
+.cs-note{font-family:var(--mono);font-size:10px;color:var(--light);margin-top:2px}
+
+/* Cards */
+.card-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.card-row{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--bdr);border-radius:4px;overflow:hidden}
+.card-hd{background:var(--black);color:#fff;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:9px 14px}
+.dr{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;border-bottom:1px solid var(--rule);gap:8px}
+.dr:last-child{border-bottom:none}
+.dr-l{font-size:13px;font-weight:600;color:var(--mid);flex-shrink:0}
+.dr-v{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--black);text-align:right}
+.dr-v.grn{color:var(--grn)}.dr-v.ora{color:var(--ora2)}
+
+/* Win prob */
+.prob-wrap{padding:14px}
+.prob-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);margin-bottom:5px}
+.prob-num{font-family:var(--mono);font-size:52px;font-weight:700;line-height:1;letter-spacing:-2px;margin-bottom:5px}
+.prob-track{height:8px;background:#eee;border-radius:4px;overflow:hidden;margin-bottom:3px}
+.prob-fill{height:100%;border-radius:4px;transition:width .3s}
+.prob-ends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--light)}
+.prob-div{border:none;border-top:1px solid var(--rule);margin:12px 0}
+.asgn-num{font-family:var(--mono);font-size:32px;font-weight:700;line-height:1;letter-spacing:-1px;margin-bottom:4px}
+.prob-desc{font-size:11px;color:var(--light);font-style:italic;margin-top:4px;line-height:1.4}
+
+/* VIX */
+.vix-wrap{padding:14px}
+.vix-num{font-family:var(--mono);font-size:44px;font-weight:700;line-height:1;letter-spacing:-2px}
+.vix-pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:3px 9px;border-radius:2px;margin:6px 0 10px}
+.vix-track{height:5px;background:linear-gradient(90deg,#22a06b 0%,#22a06b 28%,#e8b020 48%,#e07020 68%,#c03020 100%);border-radius:2px;position:relative;margin-bottom:3px}
+.vix-pin{position:absolute;top:-4px;width:3px;height:13px;background:var(--black);border-radius:1px;transform:translateX(-50%);transition:left .2s}
+.vix-ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--light);margin-bottom:10px}
+
+/* Returns table */
+.ibar-wrap{padding:12px 14px}
+.ibar{height:26px;display:flex;border-radius:2px;overflow:hidden;margin-bottom:5px}
+.iseg{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;padding:0 8px;white-space:nowrap}
+.ibar-leg{display:flex;gap:14px;font-size:11px;color:var(--mid)}
+table.rtbl{width:100%;border-collapse:collapse}
+.rtbl th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mid);padding:7px 14px;background:#fafaf8;border-bottom:2px solid var(--rule);text-align:right}
+.rtbl th:first-child{text-align:left}
+.rtbl td{font-family:var(--mono);font-size:13px;font-weight:500;padding:9px 14px;border-bottom:1px solid var(--rule);text-align:right;color:var(--mid)}
+.rtbl td:first-child{text-align:left;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--black)}
+.rtbl tr.hl td{background:#f8f8f4;font-weight:700;color:var(--black)}
+.math-note{padding:8px 14px;font-family:var(--mono);font-size:10px;color:var(--light);background:#fafaf8;border-top:1px solid var(--rule);line-height:1.8}
+
+/* Projection */
+.proj-hd{padding:9px 14px;font-family:var(--mono);font-size:11px;color:var(--mid);background:#fafaf8;border-bottom:1px solid var(--rule)}
+table.ptbl{width:100%;border-collapse:collapse}
+.ptbl th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mid);padding:7px 14px;background:#fafaf8;border-bottom:2px solid var(--rule);text-align:right}
+.ptbl th:first-child{text-align:left}
+.ptbl td{font-family:var(--mono);font-size:12px;padding:7px 14px;border-bottom:1px solid var(--rule);text-align:right;color:var(--mid)}
+.ptbl td:first-child{text-align:left;color:var(--light)}
+.ptbl tr:last-child td{background:#f0f0e8;font-weight:700;color:var(--black);border-bottom:none}
+
+.footer{font-family:var(--mono);font-size:10px;color:var(--light);text-align:center;padding:14px;border-top:1px solid var(--bdr);background:var(--panel);margin-top:4px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="tb-brand">CSP</div>
+  <div class="tb-v2">V2</div>
+  <div style="font-size:12px;font-weight:600;color:#888;margin-left:2px">Put Write</div>
+  <div class="tb-time" id="clock">--:-- --</div>
+  <div id="day-toggle" style="display:flex;align-items:center;gap:0;margin-left:6px;border:1px solid #333;border-radius:3px;overflow:hidden;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px">
+    <button id="btn-365" onclick="setDays(365)" style="padding:5px 9px;border:none;cursor:pointer;background:#1a5a30;color:#fff">365</button>
+    <button id="btn-252" onclick="setDays(252)" style="padding:5px 9px;border:none;cursor:pointer;background:#111;color:#555">252</button>
+  </div>
+  <button id="share-btn" onclick="copyLink()" style="margin-left:6px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;background:var(--ora);color:#000;border:none;border-radius:2px;padding:5px 10px;cursor:pointer">SHARE</button>
+</div>
+
+<!-- FETCH BAR -->
+<div class="fetch-bar">
+  <div class="fb-group">
+    <span class="fb-label">Symbol</span>
+    <input class="fb-input sym" id="SYM" type="text" value="SPY" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+  </div>
+  <div class="fb-group">
+    <span class="fb-label">OTM%</span>
+    <input class="fb-input otm" id="OTM_T" type="number" value="2.5" min="0.5" max="20" step="0.5" inputmode="decimal">
+  </div>
+  <button class="fb-btn" id="fetch-btn" onclick="fetchData()">FETCH</button>
+  <div class="fb-status">
+    <div class="fb-dot" id="fb-dot"></div>
+    <div class="fb-msg" id="fb-msg">Enter symbol and click FETCH</div>
+  </div>
+</div>
+
+<!-- INPUTS -->
+<div class="inputs-panel">
+  <div class="sec-title">Position</div>
+  <div class="inp-grid">
+    <div class="inp-cell">
+      <label class="inp-label">Underlying</label>
+      <input class="inp" id="U" type="number" inputmode="decimal" value="655" min="10" max="9999" step="0.5" oninput="onU()">
+      <div class="inp-unit">price $</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">Strike</label>
+      <input class="inp" id="K" type="number" inputmode="decimal" value="636" min="1" max="9999" step="0.5" oninput="calc()">
+      <div class="inp-unit">price $</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">DTE</label>
+      <input class="inp" id="DTE" type="number" inputmode="numeric" value="5" min="1" max="365" step="1" oninput="calc()">
+      <div class="inp-unit">days</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">Contracts</label>
+      <input class="inp" id="C" type="number" inputmode="numeric" value="1" min="1" max="999" step="1" oninput="calc()">
+      <div class="inp-unit">qty</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">SPAXX</label>
+      <input class="inp" id="CR" type="number" inputmode="decimal" value="3.0" min="0" max="15" step="0.1" oninput="calc()">
+      <div class="inp-unit">% / yr</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">Tax Rate</label>
+      <input class="inp" id="TR" type="number" inputmode="numeric" value="18" min="0" max="60" step="1" oninput="calc()">
+      <div class="inp-unit">%</div>
+    </div>
+    <div class="inp-cell">
+      <label class="inp-label">VIX</label>
+      <input class="inp" id="VIX" type="number" inputmode="decimal" value="22" min="5" max="80" step="0.5" oninput="calc()">
+      <div class="inp-unit">level</div>
+    </div>
+  </div>
+
+  <!-- Premium -->
+  <div class="prem-box" id="prem-box">
+    <div class="prem-label">Premium Bid / Share</div>
+    <div class="prem-row">
+      <span class="prem-sym">$</span>
+      <input class="prem-in" id="P" type="number" inputmode="decimal" value="1.50" min="0.01" max="999" step="0.01" oninput="calc()" placeholder="0.00">
+    </div>
+    <div class="prem-hint" id="P-hint">$150 per contract</div>
+  </div>
+
+  <!-- OTM banner -->
+  <div class="otm-banner">
+    <div class="otm-main">
+      <div class="otm-num" id="otm-num">--</div>
+      <div class="otm-lbl">OTM</div>
+      <span class="expiry-badge" id="expiry-badge"></span>
+    </div>
+    <div class="otm-stats">
+      <div class="otm-stat">
+        <div class="otm-stat-lbl">Buffer</div>
+        <div class="otm-stat-val" id="otm-buf">--</div>
+      </div>
+      <div class="otm-stat">
+        <div class="otm-stat-lbl">Breakeven</div>
+        <div class="otm-stat-val" id="otm-be">--</div>
+      </div>
+      <div class="otm-stat">
+        <div class="otm-stat-lbl">Drop Needed</div>
+        <div class="otm-stat-val" id="otm-drop">--</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RETURN BAR -->
+<div class="ret-bar">
+  <div class="rb-cell">
+    <div class="rb-label">Ann Return</div>
+    <div class="rb-value" id="rb-ann">--</div>
+    <div class="rb-sub" id="rb-ann-sub">--</div>
+  </div>
+  <div class="rb-cell">
+    <div class="rb-label">After Tax</div>
+    <div class="rb-value" id="rb-at">--</div>
+    <div class="rb-sub" id="rb-at-sub">--</div>
+  </div>
+  <div class="rb-cell">
+    <div class="rb-label">Cycles/Yr</div>
+    <div class="rb-value" id="rb-cyc">--</div>
+    <div class="rb-sub" id="rb-cyc-sub">--</div>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- Collateral -->
+  <div class="col-strip">
+    <div>
+      <div class="cs-label">Collateral</div>
+      <div class="cs-value" id="cs-col">--</div>
+      <div class="cs-note">Strike x 100 x C</div>
+    </div>
+    <div>
+      <div class="cs-label">Premium</div>
+      <div class="cs-value" id="cs-prem" style="color:var(--grn)">--</div>
+      <div class="cs-note" id="cs-prem-note">--</div>
+    </div>
+    <div>
+      <div class="cs-label">Net if Assigned</div>
+      <div class="cs-value" id="cs-net">--</div>
+      <div class="cs-note">Col - prem</div>
+    </div>
+  </div>
+
+  <!-- Prob + VIX -->
+  <div class="card-row">
+    <div class="card">
+      <div class="card-hd">Probability</div>
+      <div class="prob-wrap">
+        <div class="prob-lbl">Expires Worthless</div>
+        <div class="prob-num" id="win-pct">--</div>
+        <div class="prob-track"><div class="prob-fill" id="win-bar" style="width:0%;background:var(--grn)"></div></div>
+        <div class="prob-ends"><span>0%</span><span>100%</span></div>
+        <div class="prob-desc" id="win-desc">--</div>
+        <hr class="prob-div">
+        <div class="prob-lbl">Assigned</div>
+        <div class="asgn-num" id="asgn-pct">--</div>
+        <div class="prob-desc" id="asgn-desc">--</div>
+      </div>
+      <div class="dr"><span class="dr-l">Buffer</span><span class="dr-v" id="d-buf">--</span></div>
+      <div class="dr"><span class="dr-l">Breakeven</span><span class="dr-v ora" id="d-be">--</span></div>
+      <div class="dr"><span class="dr-l">Cycles/yr</span><span class="dr-v" id="d-cyc">--</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd">VIX Regime</div>
+      <div class="vix-wrap">
+        <div class="vix-num" id="vix-num">--</div>
+        <div><span class="vix-pill" id="vix-pill">--</span></div>
+        <div class="vix-track"><div class="vix-pin" id="vix-pin"></div></div>
+        <div class="vix-ticks"><span>5</span><span>15</span><span>25</span><span>40</span><span>60</span></div>
+      </div>
+      <div class="dr"><span class="dr-l">Signal</span><span class="dr-v" id="vr-sig">--</span></div>
+      <div class="dr"><span class="dr-l">Ideal OTM</span><span class="dr-v" id="vr-otm">--</span></div>
+      <div class="dr"><span class="dr-l">Win Rate</span><span class="dr-v grn" id="vr-wr">--</span></div>
+      <div class="dr"><span class="dr-l">Backtest</span><span class="dr-v grn" id="vr-ret">--</span></div>
+    </div>
+  </div>
+
+  <!-- Returns -->
+  <div class="card">
+    <div class="card-hd">Returns</div>
+    <div class="ibar-wrap">
+      <div class="ibar" id="ibar"></div>
+      <div class="ibar-leg">
+        <span style="color:var(--grn)">&#9632; Premium</span>
+        <span style="color:var(--blu)">&#9632; SPAXX</span>
+      </div>
+    </div>
+    <table class="rtbl">
+      <thead><tr><th>Component</th><th>$/Cycle</th><th>Cycle %</th><th>Ann</th><th>After-Tax</th></tr></thead>
+      <tbody id="ret-body"></tbody>
+    </table>
+    <div class="math-note" id="math-note">Cycle % = Income / (Strike x 100 x C) &nbsp; Ann = Cycle% x (365 / DTE)</div>
+  </div>
+
+  <!-- Projection -->
+  <div class="card">
+    <div class="card-hd" id="proj-title">1-Year Projection</div>
+    <div class="proj-hd" id="proj-sum">--</div>
+    <div style="overflow-x:auto">
+      <table class="ptbl">
+        <thead><tr><th>Cycle</th><th>Premium</th><th>Interest</th><th>Total</th><th>Cumulative</th><th>Return</th></tr></thead>
+        <tbody id="proj-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">CSP CALC V2 &middot; DATA: YAHOO FINANCE (15-MIN DELAY) &middot; NOT FINANCIAL ADVICE</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+var INPUTS=['U','K','DTE','C','CR','TR','VIX','P'];
+var DAYS=365;
+var LAST_EXPIRY='';
+
+// ── Persistence ────────────────────────────────────────────────────────
+function saveInputs(){
+  var d={};
+  INPUTS.forEach(function(id){d[id]=document.getElementById(id).value;});
+  d['SYM']=el('SYM').value;
+  d['OTM_T']=el('OTM_T').value;
+  try{localStorage.setItem('csp2_inputs',JSON.stringify(d));}catch(e){}
+}
+
+function loadInputs(){
+  var params=new URLSearchParams(window.location.search);
+  var fromURL=false;
+  INPUTS.forEach(function(id){
+    if(params.has(id)){var e=document.getElementById(id);if(e){e.value=params.get(id);fromURL=true;}}
+  });
+  if(params.has('SYM'))el('SYM').value=params.get('SYM');
+  if(params.has('OTM_T'))el('OTM_T').value=params.get('OTM_T');
+  if(fromURL){saveInputs();return;}
+  try{
+    var d=JSON.parse(localStorage.getItem('csp2_inputs'));
+    if(!d)return;
+    INPUTS.forEach(function(id){var e=document.getElementById(id);if(e&&d[id]!==undefined&&d[id]!=='')e.value=d[id];});
+    if(d['SYM'])el('SYM').value=d['SYM'];
+    if(d['OTM_T'])el('OTM_T').value=d['OTM_T'];
+  }catch(e){}
+}
+
+function copyLink(){
+  var params=new URLSearchParams();
+  INPUTS.forEach(function(id){params.set(id,document.getElementById(id).value);});
+  params.set('SYM',el('SYM').value);
+  params.set('OTM_T',el('OTM_T').value);
+  var url=window.location.origin+window.location.pathname+'?'+params.toString();
+  navigator.clipboard.writeText(url).then(function(){
+    var btn=document.getElementById('share-btn');
+    btn.textContent='COPIED';btn.style.background='#007a50';
+    setTimeout(function(){btn.textContent='SHARE';btn.style.background='';},2000);
+  }).catch(function(){window.prompt('Copy this link:',url);});
+}
+
+// ── Day toggle ─────────────────────────────────────────────────────────
+function setDays(d){
+  DAYS=d;
+  var b365=el('btn-365'),b252=el('btn-252');
+  b365.style.background=d===365?'#1a5a30':'#111';b365.style.color=d===365?'#fff':'#555';
+  b252.style.background=d===252?'#1a5a30':'#111';b252.style.color=d===252?'#fff':'#555';
+  try{localStorage.setItem('csp2_days',d);}catch(e){}
+  calc();
+}
+
+// ── Clock ──────────────────────────────────────────────────────────────
+(function tick(){
+  var n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+  setTimeout(tick,15000);
+})();
+
+// ── Helpers ────────────────────────────────────────────────────────────
+var f0=function(n){return n.toLocaleString('en-US',{maximumFractionDigits:0});};
+var f2=function(n){return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+var f3=function(n){return n.toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});};
+function val(id){return parseFloat(document.getElementById(id).value)||0;}
+function el(id){return document.getElementById(id);}
+function set(id,txt,color){var e=el(id);if(!e)return;e.textContent=txt;if(color)e.style.color=color;}
+
+// ── Fetch status ───────────────────────────────────────────────────────
+function setStatus(state, msg){
+  var dot=el('fb-dot'), txt=el('fb-msg');
+  dot.className='fb-dot'+(state?' '+state:'');
+  txt.className='fb-msg'+(state&&state!=='loading'?' '+state:'');
+  txt.textContent=msg;
+}
+
+// ── FETCH live data ────────────────────────────────────────────────────
+// ── Fetch with timeout + proxy fallback ───────────────────────────────
+var PROXIES=[
+  'https://api.allorigins.win/raw?url=',
+  'https://corsproxy.io/?url=',
+  'https://api.codetabs.com/v1/proxy?quest='
+];
+
+async function fetchWithTimeout(url, ms){
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){ctrl.abort();},ms||8000);
+  try{
+    var r=await fetch(url,{signal:ctrl.signal});
+    return r;
+  }finally{clearTimeout(timer);}
+}
+
+async function fetchViaProxy(rawUrl){
+  var last;
+  for(var i=0;i<PROXIES.length;i++){
+    try{
+      var r=await fetchWithTimeout(PROXIES[i]+encodeURIComponent(rawUrl),9000);
+      if(r.ok)return r;
+      last='HTTP '+r.status+' (proxy '+(i+1)+')';
+    }catch(e){
+      last=e.name==='AbortError'?'Timeout on proxy '+(i+1):e.message;
+    }
+  }
+  throw new Error('All proxies failed — last: '+last);
+}
+
+async function fetchData(){
+  var sym=el('SYM').value.trim().toUpperCase();
+  if(!sym){setStatus('err','Enter a symbol');return;}
+  var dte=Math.max(1,val('DTE'));
+  var otmTarget=val('OTM_T')/100;
+
+  var btn=el('fetch-btn');
+  btn.disabled=true;
+  btn.textContent='LOADING';
+  setStatus('loading','Fetching '+sym+'…');
+  ['U','K'].forEach(function(id){el(id).classList.remove('fetched');});
+  el('prem-box').classList.remove('fetched');
+
+  try{
+    // ── Step 1: price + expirations ──
+    setStatus('loading','Getting '+sym+' price…');
+    var r1=await fetchViaProxy('https://query1.finance.yahoo.com/v7/finance/options/'+sym);
+    var d1=await r1.json();
+    var res=d1.optionChain&&d1.optionChain.result&&d1.optionChain.result[0];
+    if(!res)throw new Error('No data for '+sym+' — check symbol');
+
+    var price=res.quote.regularMarketPrice;
+    var exps=res.expirationDates;
+    if(!exps||!exps.length)throw new Error('No expirations found for '+sym);
+
+    // ── Step 2: nearest expiration to DTE ──
+    var now=Date.now()/1000;
+    var target=now+dte*86400;
+    var bestExp=exps.reduce(function(a,b){return Math.abs(b-target)<Math.abs(a-target)?b:a;});
+    var actualDTE=Math.max(1,Math.round((bestExp-now)/86400));
+    var expDate=new Date(bestExp*1000).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+    // ── Step 3: puts chain for that expiration ──
+    setStatus('loading','Getting puts for '+expDate+'…');
+    var r2=await fetchViaProxy('https://query1.finance.yahoo.com/v7/finance/options/'+sym+'?date='+bestExp);
+    var d2=await r2.json();
+    var opts=d2.optionChain&&d2.optionChain.result&&d2.optionChain.result[0]&&d2.optionChain.result[0].options&&d2.optionChain.result[0].options[0];
+    var puts=opts&&opts.puts;
+    if(!puts||!puts.length)throw new Error('No puts found for '+expDate);
+
+    // ── Step 4: strike nearest to OTM target ──
+    var targetStrike=price*(1-otmTarget);
+    var bestPut=puts.reduce(function(a,b){return Math.abs(b.strike-targetStrike)<Math.abs(a.strike-targetStrike)?b:a;});
+    var mid=((bestPut.bid||0)+(bestPut.ask||0))/2;
+    if(mid<=0)mid=bestPut.lastPrice||0;
+
+    // ── Step 5: VIX (optional) ──
+    try{
+      var rv=await fetchWithTimeout(PROXIES[0]+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=1d'),6000);
+      var dv=await rv.json();
+      var vixPrice=dv.chart.result[0].meta.regularMarketPrice;
+      el('VIX').value=vixPrice.toFixed(2);
+    }catch(ve){/* VIX optional */}
+
+    // ── Step 6: populate ──
+    el('U').value=price.toFixed(2);
+    el('K').value=bestPut.strike.toFixed(2);
+    el('P').value=mid.toFixed(2);
+    el('DTE').value=actualDTE;
+    ['U','K'].forEach(function(id){el(id).classList.add('fetched');});
+    el('prem-box').classList.add('fetched');
+
+    LAST_EXPIRY=expDate+' · '+actualDTE+'d';
+    var badge=el('expiry-badge');
+    badge.textContent=sym+' '+expDate;
+    badge.classList.add('show');
+
+    var ts=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    setStatus('ok',sym+' · '+expDate+' · '+actualDTE+' DTE · '+ts+' · 15-min delay');
+    saveInputs();
+    calc();
+
+  }catch(err){
+    setStatus('err',err.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='FETCH';
+  }
+}
+
+// ── onU: preserve OTM% when underlying changes ────────────────────────
+function onU(){
+  var U=val('U'),K=val('K');
+  if(K>0&&U>0){
+    var otm=(U-K)/U;
+    el('K').value=(otm>0&&otm<0.30)?Math.round(U*(1-otm)*2)/2:Math.round(U*0.975*2)/2;
+  }
+  saveInputs();
+  calc();
+}
+
+// ── winProb: VIX regime backtest table ────────────────────────────────
+function winProb(otmPct,vix){
+  var base=vix<13?50:vix<18?89:vix<25?82:vix<35?87:80;
+  var adj=(otmPct-2.5)*3.5;
+  return Math.min(99,Math.max(40,Math.round(base+adj)));
+}
+
+function vixR(v){
+  if(v<13)return{l:'SUPPRESSED',bg:'#888',fg:'#fff',sig:'SKIP',otm:'4%+',wr:'~50%',ret:'~+2%'};
+  if(v<18)return{l:'LOW',bg:'#2a7a58',fg:'#fff',sig:'HALF SIZE',otm:'2.5-3%',wr:'~89%',ret:'+6-9%'};
+  if(v<25)return{l:'NORMAL',bg:'#1a6a48',fg:'#fff',sig:'FULL SIZE',otm:'2.5%',wr:'80-84%',ret:'+7-9%'};
+  if(v<35)return{l:'ELEVATED',bg:'#c87800',fg:'#fff',sig:'FULL SIZE',otm:'2.5-3%',wr:'87-100%',ret:'+28-32%'};
+  return{l:'EXTREME',bg:'#c03020',fg:'#fff',sig:'WIDEN OTM',otm:'4-5%',wr:'~80%',ret:'+40%+'};
+}
+
+// ── Main calc ──────────────────────────────────────────────────────────
+function calc(){
+  saveInputs();
+  var U=val('U'),K=val('K'),DTE=Math.max(1,val('DTE')),P=val('P');
+  var C=Math.max(1,parseInt(el('C').value)||1);
+  var CR=val('CR'),TR=val('TR'),VIX=val('VIX');
+
+  var colC=K*100, colT=colC*C;
+  var premC=P*100, premT=premC*C;
+  var intC=colC*(CR/100)*(DTE/365), intT=intC*C;
+  var combC=premC+intC, combT=premT+intT;
+
+  var cycRet=colT>0?combT/colT:0;
+  var cycRetPrem=colT>0?premT/colT:0;
+  var cycRetCash=colT>0?intT/colT:0;
+
+  var cyc=DAYS/DTE;
+  var annS=cycRet*cyc*100;
+  var annSP=cycRetPrem*cyc*100;
+  var annSC=CR;
+  var atS=annS*(1-TR/100);
+  var atSP=annSP*(1-TR/100);
+  var atSC=annSC*(1-TR/100);
+
+  var otmPct=U>0?(U-K)/U*100:0;
+  var bufDol=U-K;
+  var be=K-P;
+  var dropNd=U>0?(U-be)/U*100:0;
+  var netAsgn=colT-premT;
+  var win=winProb(otmPct,VIX);
+  var asgn=100-win;
+
+  // Premium hint
+  el('P-hint').innerHTML='$'+f0(premC)+' per contract &nbsp;&middot;&nbsp; $'+f0(premT)+' total';
+
+  // OTM banner
+  var oc=otmPct>=4?'#5cba78':otmPct>=2.5?'#FFA028':'#c8301c';
+  set('otm-num', K>=U?'--':f2(otmPct)+'%', oc);
+  set('otm-buf', K>=U?'--':'$'+f2(bufDol));
+  set('otm-be',  '$'+f2(be));
+  set('otm-drop',f2(dropNd)+'%');
+
+  // Return bar
+  var rc=annS>=12?'#5cba78':annS>=6?'#c8a000':'#c8301c';
+  set('rb-ann',    f2(annS)+'%', rc);
+  set('rb-ann-sub',f2(cyc)+' cycles/yr');
+  set('rb-at',     f2(atS)+'%', '#4090d0');
+  set('rb-at-sub', 'after '+TR+'% tax');
+  set('rb-cyc',    f2(cyc));
+  set('rb-cyc-sub','every '+DTE+'d');
+
+  // Math note
+  var mn=el('math-note');
+  if(mn)mn.innerHTML='Cycle % = Income / (Strike x 100 x C) &nbsp; Ann = Cycle% x ('+DAYS+' / DTE) &nbsp; <span style="color:'+(DAYS===252?'#c87800':'#1a5a30')+'">'+DAYS+'-day basis</span>';
+
+  // Collateral
+  set('cs-col','$'+f0(colT));
+  set('cs-prem','$'+f0(premT));
+  el('cs-prem-note').textContent='$'+f0(premC)+'/contract';
+  set('cs-net','$'+f0(netAsgn));
+
+  // Win prob
+  var wc=win>=90?'#007a50':win>=75?'#3a8a30':'#c87800';
+  set('win-pct',win+'%',wc);
+  el('win-bar').style.width=win+'%';
+  el('win-bar').style.background=wc;
+  set('win-desc',f2(otmPct)+'% OTM at VIX '+f2(VIX)+' - 2015-2023 backtest');
+  var ac=asgn<=10?'#888':asgn<=20?'#c87800':'#c8301c';
+  set('asgn-pct',asgn+'%',ac);
+  set('asgn-desc',asgn<=10?'Low assignment risk':asgn<=20?'Moderate - monitor':'Consider wider OTM');
+
+  set('d-buf','$'+f2(bufDol));
+  set('d-be','$'+f2(be)+' ('+f2(dropNd)+'% down)','#c87800');
+  set('d-cyc',f2(cyc)+'/yr');
+
+  // VIX regime
+  var R=vixR(VIX);
+  set('vix-num',f2(VIX),R.bg);
+  var pill=el('vix-pill');
+  pill.textContent=R.l;pill.style.background=R.bg;pill.style.color=R.fg;
+  el('vix-pin').style.left=Math.min(100,Math.max(0,(VIX-5)/55*100))+'%';
+  set('vr-sig',R.sig,R.bg);
+  set('vr-otm',R.otm);
+  set('vr-wr',R.wr,'#007a50');
+  set('vr-ret',R.ret,'#007a50');
+
+  // Income bar
+  var tot=premT+intT,pp=tot>0?premT/tot:0.8,ip=tot>0?intT/tot:0.2;
+  el('ibar').innerHTML=
+    '<div class="iseg" style="flex:'+Math.max(pp,.05)+';background:#1a5a30">Prem $'+f0(premT)+' ('+Math.round(pp*100)+'%)</div>'+
+    '<div class="iseg" style="flex:'+Math.max(ip,.001)+';background:#1050a0">Cash $'+f0(intT)+' ('+Math.round(ip*100)+'%)</div>';
+
+  // Returns table
+  var rows=[
+    {l:'Premium only',   pc:premT,cr:cycRetPrem*100,as:annSP,at:atSP,hl:false},
+    {l:'SPAXX ('+CR+'%)',pc:intT, cr:cycRetCash*100,as:annSC,at:atSC,hl:false},
+    {l:'Combined',       pc:combT,cr:cycRet*100,    as:annS, at:atS, hl:true},
+  ];
+  el('ret-body').innerHTML=rows.map(function(r){
+    return '<tr class="'+(r.hl?'hl':'')+'">'+
+      '<td>'+r.l+'</td>'+
+      '<td>$'+f0(r.pc)+'</td>'+
+      '<td>'+f3(r.cr)+'%</td>'+
+      '<td style="color:'+(r.hl?'#007a50':'#666')+'">'+f2(r.as)+'%</td>'+
+      '<td style="color:'+(r.hl?'#1050a0':'#888')+'">'+f2(r.at)+'%</td>'+
+      '</tr>';
+  }).join('');
+
+  // Projection
+  var cycles=Math.max(1,Math.round(cyc));
+  set('proj-title','1-Year Projection - '+cycles+' Cycles');
+  set('proj-sum','$'+f0(premT)+'/cycle prem + $'+f0(intT)+'/cycle interest = $'+f0(combT)+'/cycle  ·  Annual: $'+f0(combT*cycles));
+  var pr='';
+  for(var i=1;i<=Math.min(cycles,52);i++){
+    var cum=combT*i,ret=colT>0?cum/colT*100:0,last=i===Math.min(cycles,52);
+    pr+='<tr>'+
+      '<td>C'+i+'</td>'+
+      '<td style="color:#1a5a30">$'+f0(premT)+'</td>'+
+      '<td style="color:#1050a0">$'+f0(intT)+'</td>'+
+      '<td>$'+f0(combT)+'</td>'+
+      '<td>$'+f0(cum)+'</td>'+
+      '<td style="color:'+(last?'#007a50':'#666')+';font-weight:'+(last?700:400)+'">'+f2(ret)+'%</td>'+
+      '</tr>';
+  }
+  el('proj-body').innerHTML=pr;
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────
+loadInputs();
+try{var sd=localStorage.getItem('csp2_days');if(sd)setDays(parseInt(sd));}catch(e){}
+calc();
+</script>
+</body>
+</html>
