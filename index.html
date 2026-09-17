@@ -498,15 +498,20 @@ async function fetchData(){
     var d=await r.json();
     if(d.error)throw new Error(d.error);
 
-    // Populate fields
+    // Populate U, K, DTE, VIX — premium left for manual entry
     el('U').value=d.price.toFixed(2);
     el('K').value=d.strike.toFixed(2);
-    el('P').value=(d.mid||d.bid||0).toFixed(2);
     el('DTE').value=d.actualDTE;
     if(d.vix)el('VIX').value=d.vix.toFixed(2);
 
-    ['U','K'].forEach(function(id){el(id).classList.add('fetched');});
+    // Clear P and highlight it so it's obvious it needs filling
+    el('P').value='';
     el('prem-box').classList.add('fetched');
+    el('prem-box').style.borderColor='#c87800';
+    el('P').placeholder='enter premium';
+    el('prem-box').querySelector('.prem-label').textContent='Premium — enter from broker';
+
+    ['U','K'].forEach(function(id){el(id).classList.add('fetched');});
 
     var expDate=new Date(d.expDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
     LAST_EXPIRY=expDate+' · '+d.actualDTE+'d';
@@ -515,7 +520,7 @@ async function fetchData(){
     badge.classList.add('show');
 
     var ts=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
-    setStatus('ok',sym+' · '+expDate+' · '+d.actualDTE+' DTE · '+ts+' · 15-min delay');
+    setStatus('ok',sym+' · '+expDate+' · '+d.actualDTE+' DTE · '+ts+' · enter premium to complete');
     saveInputs();
     calc();
 
