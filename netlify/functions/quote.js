@@ -24,43 +24,36 @@ exports.handler = async event => {
   if (!sym) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'symbol required' }) };
 
   try {
-    // ── 1. Stock price via prev close (reliable on free tier) ───────
+    // ── 1. Stock price (prev close — free tier) ─────────────────────
     const pr = await get(`/v2/aggs/ticker/${sym}/prev`);
-    if (pr.data.resultsCount === 0 || !pr.data.results || !pr.data.results.length)
-      throw new Error(`No price data for ${sym} — is the market open? status: ${pr.data.status}`);
-    const price = pr.data.results[0].c; // previous close
+    if (!pr.data.results || !pr.data.results.length)
+      throw new Error(`No price data for ${sym}`);
+    const price = pr.data.results[0].c;
 
-    // ── 2. Options expirations ──────────────────────────────────────
+    // ── 2. Options expirations (free tier) ──────────────────────────
     const refr = await get(`/v3/reference/options/contracts?underlying_ticker=${sym}&contract_type=put&order=asc&limit=250&sort=expiration_date`);
     const contracts = refr.data.results || [];
-    if (!contracts.length) throw new Error(`No options contracts found for ${sym}. status: ${refr.data.status}`);
+    if (!contracts.length) throw new Error(`No options found for ${sym}`);
     const expirations = [...new Set(contracts.map(c => c.expiration_date))].sort();
 
-    // ── 3. Find expiration nearest to DTE ──────────────────────────
+    // ── 3. Nearest expiration to DTE ────────────────────────────────
     const dte = Math.max(1, parseInt(q.dte) || 7);
     const now = new Date();
     const targetMs = now.getTime() + dte * 86400000;
     const bestExp = expirations.reduce((a, b) =>
-      Math.abs(new Date(b).getTime() - targetMs) < Math.abs(new Date(a).getTime() - targetMs) ? b : a
+      Math.abs(new Date(b) - targetMs) < Math.abs(new Date(a) - targetMs) ? b : a
     );
-    const actualDTE = Math.max(1, Math.round((new Date(bestExp).getTime() - now.getTime()) / 86400000));
+    const actualDTE = Math.max(1, Math.round((new Date(bestExp) - now) / 86400000));
 
-    // ── 4. Puts chain for that expiration ──────────────────────────
-    const chain = await get(`/v3/snapshot/options/${sym}?expiration_date=${bestExp}&contract_type=put&limit=250&order=asc`);
-    const puts = chain.data.results || [];
-    if (!puts.length) throw new Error(`No puts snapshot for ${bestExp}. May require paid tier. status: ${chain.data.status}`);
-
-    // ── 5. Find strike nearest to OTM target ───────────────────────
+    // ── 4. Strike nearest to OTM% (from reference contracts) ────────
     const otm = parseFloat(q.otm) || 2.5;
     const targetStrike = price * (1 - otm / 100);
-    const best = puts.reduce((a, b) =>
-      Math.abs(b.details.strike_price - targetStrike) < Math.abs(a.details.strike_price - targetStrike) ? b : a
+    const expContracts = contracts.filter(c => c.expiration_date === bestExp);
+    const best = expContracts.reduce((a, b) =>
+      Math.abs(b.strike_price - targetStrike) < Math.abs(a.strike_price - targetStrike) ? b : a
     );
-    const bid = (best.last_quote && best.last_quote.bid) || (best.day && best.day.close) || 0;
-    const ask = (best.last_quote && best.last_quote.ask) || bid;
-    const mid = (best.last_quote && best.last_quote.midpoint) || (bid + ask) / 2;
 
-    // ── 6. VIX ─────────────────────────────────────────────────────
+    // ── 5. VIX prev close ───────────────────────────────────────────
     let vix = null;
     try {
       const vr = await get('/v2/aggs/ticker/I:VIX/prev');
@@ -70,7 +63,15 @@ exports.handler = async event => {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Cache-Control': 'public, max-age=900' },
-      body: JSON.stringify({ price, strike: best.details.strike_price, expDate: bestExp, actualDTE, bid, ask, mid, vix, symbol: sym })
+      body: JSON.stringify({
+        price,
+        strike: best.strike_price,
+        expDate: bestExp,
+        actualDTE,
+        vix,
+        symbol: sym
+        // Note: premium (mid) not included — requires paid tier
+      })
     };
 
   } catch(e) {
